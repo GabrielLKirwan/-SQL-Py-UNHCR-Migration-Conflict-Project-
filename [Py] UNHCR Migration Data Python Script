@@ -1,0 +1,77 @@
+import requests
+import csv
+import time
+
+def download_unhcr_data_by_year(endpoint, start_year, end_year, filename):
+    base_url = f"https://api.unhcr.org/population/v1/{endpoint}/"
+    print(f"Starting extraction for {endpoint} ({start_year}-{end_year})...")
+    
+    total_rows = 0
+    headers_written = False
+    
+    
+    with open(filename, 'w', newline='', encoding='utf-8') as file:
+        writer = None
+        
+        
+        for year in range(start_year, end_year + 1):
+            print(f"  -> Fetching year {year}...")
+            
+            api_parameters = {
+                "yearFrom": year,
+                "yearTo": year,
+                "coo_all": "true", 
+                "coa_all": "true",
+                "limit": 100000 # 1 year of data will easily fit under this limit
+            }
+            
+            try:
+                response = requests.get(base_url, params=api_parameters)
+                response.raise_for_status() 
+                
+                data = response.json()
+                records = data.get('items', [])
+                
+                if not records:
+                    print(f"     No records found for {year}.")
+                    continue
+
+                
+                if not headers_written:
+                    all_keys = set()
+                    for r in records:
+                        all_keys.update(r.keys())
+                    headers = sorted(list(all_keys))
+                    
+                    writer = csv.DictWriter(file, fieldnames=headers, extrasaction='ignore')
+                    writer.writeheader()
+                    headers_written = True
+                
+
+                writer.writerows(records)
+                total_rows += len(records)
+                
+            except requests.exceptions.HTTPError as err:
+                print(f"     HTTP Error for {year}: {err}")
+                print(f"     API Response: {response.text}")
+            except Exception as e:
+                print(f"     An error occurred for {year}: {e}")
+                
+
+            time.sleep(1)
+            
+    print(f"Done! Saved a total of {total_rows} rows to '{filename}'\n")
+
+
+if __name__ == "__main__":
+    START_YEAR = 2000
+    END_YEAR = 2026
+    
+
+    download_unhcr_data_by_year(
+        endpoint="population",
+        start_year=START_YEAR,
+        end_year=END_YEAR,
+        filename=f"unhcr_persons_of_concern_{START_YEAR}_{END_YEAR}.csv"
+    )
+import os
