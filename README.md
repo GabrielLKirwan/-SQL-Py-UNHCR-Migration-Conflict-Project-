@@ -4,6 +4,12 @@ This repository contains the data extraction scripts, SQL transformation models,
 
 The workflow utilizes an ELT (Extract, Load, Transform) architecture, shifting away from legacy ETL tools (like Alteryx) in favor of Python for extraction, Snowflake for cloud-native transformations, and Tableau for geospatial and network visualization.
 
+
+
+<img width="1558" height="1116" alt="image" src="https://github.com/user-attachments/assets/fc4d67d9-9c85-438c-b0c9-5c4929a47671" />
+
+
+
 ## Architecture & Tech Stack
 
 * **Python:** API extraction, pagination, and local file staging.
