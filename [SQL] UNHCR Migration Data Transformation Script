@@ -1,0 +1,125 @@
+CREATE OR REPLACE TABLE final_unhcr_migration_ucdp_conflict_table AS
+    WITH ucdp_rolled_up AS (
+            SELECT 
+                year
+                ,location
+                ,MAX(COALESCE(intensity_level,0)) AS conflict_intensity 
+                ,LISTAGG(DISTINCT side_a, ', ') AS government_actors
+                ,LISTAGG(DISTINCT side_b, ', ') AS non_state_actors
+            FROM ucdp_armed_conflict
+            GROUP BY year, location
+        ),
+        
+        UNHCR_UCDP AS (
+            SELECT
+                un.year
+                ,un.coo_name AS country_of_origin
+                ,un.coo_iso AS country_of_origin_code
+                ,LEFT(wr_o.region, LENGTH(wr_o.region) - 4) as origin_region
+                ,cco.longitude as country_origin_longitude 
+                ,cco.latitude as country_origin_latitude
+                ,uc.conflict_intensity
+                ,uc.government_actors
+                ,uc.non_state_actors
+                ,uc.location
+                ,un.coa_name AS country_of_arrival
+                ,un.coa_iso AS country_of_arrival_code
+                ,LEFT(wr_a.region,LENGTH(wr_a.region)-4) as arrival_region
+                ,cca.longitude as country_arrival_longitude 
+                ,cca.latitude as country_arrival_latitude
+                ,un.asylum_seekers as asylum_seekers
+                ,un.hst as host_population
+                ,un.idps as internally_displaced_persons
+                ,COALESCE(TRY_CAST(un.oip AS INT),0) as other_people_needing_protection
+                ,un.ooc as others_of_concern
+                ,un.refugees as refugees
+                ,un.stateless as stateless
+                ,un.returned_idps as returned_idps
+                ,un.returned_refugees as returned_refugees
+                ,zeroifnull(un.refugees)+ zeroifnull(un.asylum_seekers) + zeroifnull(un.idps) +zeroifnull(un.stateless) + COALESCE(TRY_CAST(un.oip AS INT),0) as total_forced_displacement
+            FROM unhcr_persons_of_concern_2000_2026 as un 
+                LEFT JOIN ucdp_rolled_up as uc  
+                    ON un.coo_name = uc.location and un.year = uc.year 
+                LEFT JOIN country_coord_look_up as cco
+                    ON  un.coo_iso = cco.alpha_3_code
+                LEFT JOIN country_coord_look_up as cca  
+                    ON un.coa_iso = cca.alpha_3_code
+                LEFT JOIN world_region_look_up_table as wr_o 
+                    ON wr_o.code = un.coo_iso
+                LEFT JOIN world_region_look_up_table as wr_a 
+                    ON wr_a.code = un.coa_iso
+        ),
+
+        spatial_data AS (
+            SELECT
+                *
+                ,ST_MAKEPOINT(country_origin_longitude,country_origin_latitude) AS origin_point
+                ,ST_MAKEPOINT(country_arrival_longitude,country_arrival_latitude) AS arrival_point
+                ,ST_MAKELINE(origin_point, arrival_point) AS migration_path_line
+                ,ST_DISTANCE(origin_point, arrival_point) AS distance_meters
+            FROM UNHCR_UCDP 
+        ),
+        
+        migration_lag AS (
+            SELECT
+                *
+                ,LAG(conflict_intensity, 1) OVER (
+                     PARTITION BY country_of_origin, country_of_arrival
+                     ORDER BY year 
+                     ) AS previous_year_conflict_intensity
+            FROM spatial_data
+        )
+        
+        SELECT
+                year as "Year"
+                ,country_of_origin as "Country of Origin"
+                ,country_of_origin_code as "Country of Origin ISO"
+                ,origin_region as "Region Origin"
+                ,country_origin_longitude as "Country of Origin Longitude"
+                ,country_origin_latitude as "Country of Origin Latitude"
+                ,origin_point as "Country of Origin Point"
+                ,COALESCE(conflict_intensity,0) as "Conflict Intensity"
+                ,COALESCE(previous_year_conflict_intensity,0) as "Previous Year Conflict Intensity"
+                ,government_actors as "Government Actors"
+                ,non_state_actors as "Non State Actors"
+                ,location as "Location"
+                ,country_of_arrival as "Country of Asylum"
+                ,country_of_arrival_code as "Country of Asylum ISO"
+                ,arrival_region as "Asylum Region"
+                ,country_arrival_longitude as "Country of Asylum Longitude"
+                ,country_arrival_latitude as "Country of Asylum Latitude"
+                ,arrival_point as "Country of Asylum Point"
+                ,migration_path_line AS "Route"
+                ,distance_meters/1000 AS "Distance [KM]"
+                ,asylum_seekers as "Asylum Seekers"
+                ,host_population as "Host Population"
+                ,internally_displaced_persons as "Internally Displaced Persons"
+                ,COALESCE(TRY_CAST(other_people_needing_protection AS INT),0) as"Other People Needing Protection" 
+                ,others_of_concern as "Others of Concern"
+                ,refugees as "Refugees"
+                ,stateless as "Stateless"
+                ,returned_idps as "Returned Internally Displaced Persons"
+                ,returned_refugees as "Returned Refugees"
+                ,total_forced_displacement as "Total Forced Displacement"
+        FROM migration_lag;
+
+
+
+
+
+
+
+
+SELECT* 
+
+FROM FINAL_UNHCR_MIGRATION_UCDP_CONFLICT_TABLE
+
+
+
+
+
+
+
+
+
+
